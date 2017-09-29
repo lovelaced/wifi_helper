@@ -54,7 +54,7 @@ if [ -z "$1" ]; then
     exit 0
 fi
 
-ap_match=$(echo "$results" | grep -i $to_connect)
+ap_match=$(echo "$results" | grep -i -e "$to_connect")
 
 if [[ $? -ne 0 ]]; then
     echo "Sorry, no matching networks found."
