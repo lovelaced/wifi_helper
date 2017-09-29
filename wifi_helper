@@ -5,7 +5,14 @@
 # of recently scanned APs, or if given no argument prints a list of
 # SSIDs and their signal strengths and authentication type
 
-wpa_conf_file="/etc/wpa_supplicant/wpa_supplicant-wls1.conf"
+#TODO: support choice of interfaces here if multiple are detected
+interface=$(cat /proc/net/wireless | tail -n 1 | cut -f 1 -d ":")
+if [[ $? -ne 0 ]]; then
+    echo "Fix your wireless interface and try again."
+    exit 1
+fi
+
+wpa_conf_file="/etc/wpa_supplicant/wpa_supplicant-$interface.conf"
 wpa_cli=$(which wpa_cli)
 
 if [[ $? -ne "0" ]]; then
@@ -14,13 +21,6 @@ if [[ $? -ne "0" ]]; then
 fi
 
 wpa_passphrase=$(which wpa_passphrase)
-
-#TODO: support choice of interfaces here if multiple are detected
-interface=$(cat /proc/net/wireless | tail -n 1 | cut -f 1 -d ":")
-if [[ $? -ne 0 ]]; then
-    echo "Fix your wireless interface and try again."
-    exit 1
-fi
 
 $(which ps) aux | grep "[w]pa_supplicant" > /dev/null 2>&1
 
