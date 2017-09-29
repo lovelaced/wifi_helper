@@ -1,0 +1,82 @@
+#!/bin/bash
+
+# a script which takes a string and checks if there's a match,
+# using a list of information from `wpa_cli scan`
+# of recently scanned APs, or if given no argument prints a list of
+# SSIDs and their signal strengths and authentication type
+
+wpa_conf_file="/etc/wpa_supplicant/wpa_supplicant-wls1.conf"
+wpa_cli=$(which wpa_cli)
+
+if [[ $? -ne "0" ]]; then
+    echo "wpa_supplicant not installed. Please install it to use this script."
+    exit 1
+fi
+
+wpa_passphrase=$(which wpa_passphrase)
+
+#TODO: support choice of interfaces here if multiple are detected
+interface=$(cat /proc/net/wireless | tail -n 1 | cut -f 1 -d ":")
+if [[ $? -ne 0 ]]; then
+    echo "Fix your wireless interface and try again."
+    exit 1
+fi
+
+$(which ps) aux | grep "[w]pa_supplicant" > /dev/null 2>&1
+
+if [[ $? -ne 0 ]]; then
+	echo "wpa_supplicant is not running. Starting wpa_supplicant..."
+	sudo $(which wpa_supplicant) -i $interface -c $wpa_conf_file -B
+fi
+
+
+if [ $# -gt 1 ]; then
+    echo "Usage: $0 [partial string to match to SSID]"
+    exit 1
+fi
+
+to_connect=$1
+
+scan_status=$($wpa_cli scan)
+
+while [[ $scan_status == *"FAIL"* ]]; do
+    sleep 2
+    scan_status=$($wpa_cli scan)
+done
+
+results=$($wpa_cli scan_results)
+
+if [ -z "$1" ]; then
+    ap_list=$(echo "$results" | sort -k3 | awk '{print $3, $5}' | head -n -2)
+    echo -e "\nstr/ssid"
+    echo "---------------"
+    echo "$ap_list"
+    exit 0
+fi
+
+ap_match=$(echo "$results" | grep -i $to_connect)
+
+if [[ $? -ne 0 ]]; then
+    echo "Sorry, no matching networks found."
+    exit 1
+fi
+
+matched_ssid=$(echo $ap_match | head -n 1 | awk '{print $5}')
+grep $matched_ssid $wpa_conf_file > /dev/null 2>&1
+if [[ $? -eq 0 ]]; then
+    echo "You already have that network configured. Edit $wpa_conf_file to change its configuration."
+    exit 3
+fi
+
+no_auth=$(echo $ap_match | grep "OPEN")
+if [[ $? -eq 0 ]]; then
+    echo -e "network={\n    ssid="$matched_ssid"\n    key_mgmt=NONE\n}" 
+    $wpa_cli reconfigure
+    exit 0
+fi
+
+echo -n "Enter password for $matched_ssid: "
+read -s pass
+$wpa_passphrase $(echo $matched_ssid | cut -f 2 -d " ") $pass | sudo tee -a $wpa_conf_file > /dev/null
+$wpa_cli reconfigure
+exit 0
