@@ -1,9 +1,11 @@
 #!/bin/bash
+trap "exit" INT
 
 # a script which takes a string and checks if there's a match,
 # using a list of information from `wpa_cli scan`
 # of recently scanned APs, or if given no argument prints a list of
 # SSIDs and their signal strengths and authentication type
+
 
 #TODO: support choice of interfaces here if multiple are detected
 interface=$(cat /proc/net/wireless | tail -n 1 | cut -f 1 -d ":")
@@ -21,10 +23,15 @@ if [[ $? -ne "0" ]]; then
 fi
 
 wpa_passphrase=$(which wpa_passphrase)
+systemctl=$(which systemctl)
+if [[ $? -eq 0 ]]; then
+    /usr/bin/systemctl status wpa_supplicant | grep "running"
+    service_exists=$?
+fi 
 
 $(which ps) aux | grep "[w]pa_supplicant" > /dev/null 2>&1
-
-if [[ $? -ne 0 ]]; then
+process_exists=$?
+if [ "$process_exists" == 1 ] || [ "$service_exists" == 0 ]; then
 	echo "wpa_supplicant is not running. Starting wpa_supplicant..."
 	sudo $(which wpa_supplicant) -i $interface -c $wpa_conf_file -B
 fi
@@ -75,8 +82,9 @@ if [[ $? -eq 0 ]]; then
     exit 0
 fi
 
-echo -n "Enter password for $matched_ssid: "
+echo -n "Enter password for $matched_ssid: " 
 read -s pass
+echo -e "\n"
 $wpa_passphrase $(echo $matched_ssid | cut -f 2 -d " ") $pass | sudo tee -a $wpa_conf_file > /dev/null
 $wpa_cli reconfigure
 exit 0
