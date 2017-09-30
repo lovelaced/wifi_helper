@@ -1,4 +1,6 @@
-#### wifi_helper ####
+## wifi_helper ##
+
+------------------
 
 Usage: ./wifi_helper **[string]**
 
