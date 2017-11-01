@@ -25,15 +25,15 @@ fi
 wpa_passphrase=$(which wpa_passphrase)
 systemctl=$(which systemctl)
 if [[ $? -eq 0 ]]; then
-    /usr/bin/systemctl status wpa_supplicant | grep "running"
+    $systemctl status wpa_supplicant | grep "running"
     service_exists=$?
 fi 
 
 $(which ps) aux | grep "[w]pa_supplicant" > /dev/null 2>&1
 process_exists=$?
 if [ "$process_exists" == 1 ] || [ "$service_exists" == 0 ]; then
-	echo "wpa_supplicant is not running. Starting wpa_supplicant..."
-	sudo $(which wpa_supplicant) -i $interface -c $wpa_conf_file -B
+    echo "wpa_supplicant is not running. Starting wpa_supplicant..."
+    sudo $(which wpa_supplicant) -i $interface -c $wpa_conf_file -B
 fi
 
 
@@ -46,12 +46,17 @@ to_connect=$1
 
 scan_status=$($wpa_cli scan)
 
+tries=0
 while [[ $scan_status == *"FAIL"* ]]; do
     sleep 2
     scan_status=$($wpa_cli scan)
+    let "tries+=1"
+    if [[ tries -ge 10 ]]; then
+        echo "Couldn't scan networks after 10 tries. Please wait a bit and try running this again."
+    fi
 done
 
-results=$($wpa_cli scan_results)
+results=$($wpa_cli scan_results | tail -n +3)
 
 if [ -z "$1" ]; then
     ap_list=$(echo "$results" | sort -k3 | awk '{print $3, $5}' | head -n -2)
@@ -62,20 +67,21 @@ if [ -z "$1" ]; then
 fi
 
 ap_match=$(echo "$results" | grep -i -e "$to_connect")
-
 if [[ $? -ne 0 ]]; then
     echo "Sorry, no matching networks found."
     exit 1
 fi
 
-matched_ssid=$(echo $ap_match | head -n 1 | awk '{print $5}')
+matched_ssid=$(echo "$ap_match" | head -n 1 | awk '{print $5}')
 grep $matched_ssid $wpa_conf_file > /dev/null 2>&1
+
 if [[ $? -eq 0 ]]; then
     echo "You already have that network configured. Edit $wpa_conf_file to change its configuration."
     exit 3
 fi
 
 no_auth=$(echo $ap_match | grep "OPEN")
+
 if [[ $? -eq 0 ]]; then
     echo -e "network={\n    ssid="$matched_ssid"\n    key_mgmt=NONE\n}" 
     $wpa_cli reconfigure
